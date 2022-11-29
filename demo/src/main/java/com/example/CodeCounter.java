@@ -1,6 +1,7 @@
 package com.example;
 import java.io.*;
 import java.util.regex.*;
+import java.util.*;
 
 public class CodeCounter{
     private int commentCount = 0;
@@ -9,16 +10,19 @@ public class CodeCounter{
     private int codePlusCommentCount = 0;
     private int currentLineNumber = 0;
 
-    private String regexOfDoubleSlash = "^([^\"]|(((?<!\\\\)\").*?((?<!\\\\)\")))*//.*";
+    private static final String regexOfDoubleSlash = "^([^\"]|(((?<!\\\\)\").*?((?<!\\\\)\")))*//.*";
     private Pattern patternOfDoubleSlash = Pattern.compile(regexOfDoubleSlash);
-    private String regexOfSlashStar = "^([^\"]|(((?<!\\\\)\").*?((?<!\\\\)\")))*/\\*.*";
+    private static final String regexOfSlashStar = "^([^\"]|(((?<!\\\\)\").*?((?<!\\\\)\")))*/\\*.*";
     private Pattern patternOfSlashStar = Pattern.compile(regexOfSlashStar);
-    private String regexOfStarSlash = "^.*\\*/([^\"]|(((?<!\\\\)\").*?((?<!\\\\)\")))*";
+    private static final String regexOfStarSlash = "^.*\\*/([^\"]|(((?<!\\\\)\").*?((?<!\\\\)\")))*";
     private Pattern patternOfStarSlash = Pattern.compile(regexOfStarSlash);
+    private static final String regexnOfSimpleStarSlash = "\\*/";
+    private Pattern patternOfSimpleStarSlash = Pattern.compile(regexnOfSimpleStarSlash);
     private Matcher m;
     
-
+    // they're defined here and used2reseted in reading a line, but serving as global variable.
     private int flagOfCommenting = 0;
+    private int havePreviousCode = 0;
 
     private void reset(){
         this.commentCount = 0;
@@ -26,6 +30,8 @@ public class CodeCounter{
         this.codeCount = 0;
         this.codePlusCommentCount = 0;
         this.currentLineNumber = 0;
+        this.havePreviousCode = 0;
+        this.flagOfCommenting = 0;
     }
 
     private void addLine(){
@@ -65,118 +71,100 @@ public class CodeCounter{
         }
     }
 
-    private void getStatistics(){
-        System.out.println("Code statistics information:\n");
+    private int[] getStatistics(){
+        System.out.println("Code statistics information:");
         System.out.format("total count = %d\n", this.blankCount + this.commentCount
         + this.codeCount + this.codePlusCommentCount);
-        System.out.format("blank count = %d\n", this.blankCount);
+        System.out.format("blank count = %d\n", this.blankCount);        
+        System.out.format("pure code count = %d\n", this.codeCount);
         System.out.format("comment count = %d\n", this.commentCount);
-        System.out.format("code count = %d\n", this.codeCount + this.codePlusCommentCount);
-        System.out.format("code with comment suffix = %d\n", this.codePlusCommentCount);
+
+        System.out.format("code with comment = %d\n", this.codePlusCommentCount);
+        int[] result = {this.blankCount, this.codeCount, this.commentCount, this.codePlusCommentCount};
+        return result;
     }
 
+    public static int[] readAndCount(String fileName){
+        File file=new File(fileName); /*test0*/
+        int[] result = CodeCounter.countComment(file);
+        // Arrays.stream(result).forEach(System.out::println);
+        return result;
+    }
 
     public static void main(String [] args){
-        File file=new File(args[0]); /*test0*/
-        CodeCounter.countComment(file);/*
-            a simple test
-        *//*
-            a test2
-        */System.out.println("/**/");/*
-        /*
-         * 
-         */
-        // if (args.length != 1) {
-        //     System.err.println("Invalid command line，exactly one argument required");
-        //     System.exit(1);
-        // }
-        // try {
-        //     BufferedReader br = new BufferedReader(new FileReader(args[0]));
-        //     String strLine;
-        //     while ((strLine = br.readLine()) != null) {
-        //         //Print the content on the console
-        //         System.out.println(strLine);
-        //     }
-        // } catch(IOException e) {
-        //     e.printStackTrace( );
-        // }
+        CodeCounter.readAndCount(args[0]);
+        // CodeCounter.readAndCount("demo\\test_code\\equivalence_class_test\\test12.java");
     }
 
-    public static void countComment(File filename){
+    public static int[] countComment(File filename){
         CodeCounter counter = new CodeCounter();
+        int[] result = {};
         String line = "";
         counter.reset();
-        System.out.println("This line is a test for // and /* in \"\"");
+        // System.out.println("This line is a test for // and /* in \"\"");
         try{
             BufferedReader br = new BufferedReader(new FileReader(filename));
-            counter.  decideType(counter, line, br);
+            counter.decideType(counter, line, br);
             br.close();
         } catch (IOException e){
             e.printStackTrace();
         }
         finally {
-            counter.getStatistics();
+            result = counter.getStatistics();
         }
-
+        return result;
     }
 
-    private void countOutOfCommenting(CodeCounter counter, String line){
+    private void countCommentingofLine(CodeCounter counter, String line){
         if (line.length() == 0){
-            counter.addBlank();
+            if (flagOfCommenting == 1)
+                counter.addComment();
+            else
+                counter.addBlank();
         }
         else if (line.startsWith("//")){
             counter.addComment();
         }
-        else if (patternOfDoubleSlash.matcher(line).find()){
+        else if (patternOfDoubleSlash.matcher(line).find() && ! patternOfSlashStar.matcher(line).find()){
             counter.addCodePlusComment();
         }
         else if (patternOfSlashStar.matcher(line).find()){
-            if (line.startsWith("/*"))
+            if (line.startsWith("/*")){
                 counter.addComment();
-            else
+            }
+            else{
                 counter.addCodePlusComment();
-            flagOfCommenting = 1;
+            }
+            m = patternOfSimpleStarSlash.matcher(line);
+            if(!m.find())
+                flagOfCommenting = 1;
         }
-        else
-            counter.addCode();
+        else{
+            if (flagOfCommenting == 1)
+                counter.addCodePlusComment();
+            else
+                counter.addCode();
+        }
+            
     }
 
     private void decideType(CodeCounter counter, String line, BufferedReader br){
-        flagOfCommenting = 0;
+        reset();
         while((line = counter.readMyLine(br))!= null){
             line = line.trim();
             // 匹配空行
             if (flagOfCommenting == 0){
-                countOutOfCommenting(counter, line);
-                // if (line.length() == 0){
-                //     counter.addBlank();
-                // }
-                // else if (line.startsWith("//")){
-                //     counter.addComment();
-                // }
-                // else if (patternOfDoubleSlash.matcher(line).find()){
-                //     counter.addCodePlusComment();
-                // }
-                // else if (patternOfSlashStar.matcher(line).find()){
-                //     if (line.startsWith("/*"))
-                //         counter.addComment();
-                //     else
-                //         counter.addCodePlusComment();
-                //     flagOfCommenting = 1;
-                // }
-                // else
-                //     counter.addCode();
-            } else{
-                m = patternOfStarSlash.matcher(line);
-                if(m.find()){
-                    countOutOfCommenting(counter, line);
+                countCommentingofLine(counter, line);
+            }else{
+                if(patternOfStarSlash.matcher(line).find()){
+                    m = patternOfSimpleStarSlash.matcher(line);
+                    m.find();
+                    countCommentingofLine(counter, line.substring(m.end()));
                     flagOfCommenting = 0;
-                    System.out.println(m.start());
                 }else{
                     counter.addComment();
                 }
             }
-            
         }
     }
 
