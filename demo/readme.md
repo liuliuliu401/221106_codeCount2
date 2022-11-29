@@ -5,13 +5,16 @@ This is a simple tool to calculate lines in java files as well as a homework pro
 Rule as follows:
 In the program, the code is divided into 4 categories: 
 
-<b>1. blank, 
+<b>
+
+1. blank, 
 
 2. pure code, 
 
 3. comment, 
 
-4. code with comment</b>. 
+4. code with comment
+</b>. 
 
 There into:
 1. A <b>blank line</b> is a line that does not have any characters (except for newlines and tabs), and the line length is 0 when read. For example:
